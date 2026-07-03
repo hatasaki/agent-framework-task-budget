@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-framework-task-budget"
+version = "0.1.0"
+description = "Task budget extension for Microsoft Agent Framework (minimal, version-resilient)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Keisuke Hatasaki" }]
+keywords = ["agent-framework", "agent-framework-task-budget", "llm", "middleware", "token-budget"]
+dependencies = [
+    # Uses only the stable core-middleware surface (version-resilient; see README).
+    "agent-framework>=1.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_framework_task_budget"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"

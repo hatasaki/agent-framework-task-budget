@@ -270,33 +270,6 @@ class TaskBudget:
 | `snapshot()` | A `{"total", "remaining"}` dict, for persisting across sessions/compaction. |
 | `restore(data, *, min_total=20_000)` | Rebuild a budget from `snapshot()` (useful to resume a partially-spent budget). |
 
-### About `min_total` (a safety floor on `total`)
-
-`min_total` guards against accidentally creating a tiny, useless budget. When you build a `TaskBudget`, its `total` must be **at least `min_total`**; otherwise the constructor raises `ValueError`. The default floor is `20_000` tokens.
-
-- **Want a small budget on purpose?** Pass `min_total=0` to turn the check off — then any positive `total` is accepted at face value.
-- **On the hosted request path the floor does not get in the way.** `bind_budget` / `bind_budget_over` bind the budget with `min_total=0`, so a budget a client sends in the request is used exactly as given, no matter how small. The `20_000` floor only applies when you construct a `TaskBudget(...)` yourself in code.
-
-In short: `min_total` is a "don't let me set a silly-small budget by accident" guard for direct `TaskBudget` construction. It is off (`0`) for client-supplied budgets.
-
-The actual countdown text injected into the model (`render_status()`):
-
-```text
-## Task budget (advisory)
-You have about {remaining:,} of {total:,} tokens left for this entire task —
-counting your thinking, tool calls, tool results and final output. Pace yourself,
-do the most important work first, and wrap up gracefully before the budget runs
-out. This is guidance, not a hard limit.
-```
-
-The instruction handed to the model in place of a tool result when the budget is spent (`_BUDGET_EXHAUSTED_WRAPUP`):
-
-```text
-Task budget exhausted. Do not call this or any other tool again. Using only the
-information you have already gathered, write your best final answer now, and
-briefly note anything you could not complete.
-```
-
 ---
 
 ## 11. Design points and constraints

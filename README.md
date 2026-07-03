@@ -73,7 +73,7 @@ client = OpenAI(base_url="https://<your-hosted-agent-endpoint>", api_key="...")
 client.responses.create(
     model="my-agent",
     input="Investigate the flaky CI test.",
-    metadata={"agent_framework_task_budget_tokens": "80000"},      # advisory only
+    metadata={"task_budget_tokens": "80000"},      # advisory only
 )
 ```
 
@@ -86,8 +86,8 @@ client.responses.create(
     model="my-agent",
     input="Investigate the flaky CI test.",
     metadata={
-        "agent_framework_task_budget_tokens": "80000",
-        "agent_framework_task_budget_enforce": "true",             # omit or "false" = advisory only
+        "task_budget_tokens": "80000",
+        "task_budget_enforce": "true",             # omit or "false" = advisory only
     },
 )
 ```
@@ -112,7 +112,7 @@ backstop is on.
 
 ```python
 # client request metadata — advisory only (see §3 for the full call):
-metadata={"agent_framework_task_budget_tokens": "3582"}
+metadata={"task_budget_tokens": "3582"}
 ```
 
 The countdown is a **hint, not a limit** — the loop is never force-stopped. But on a
@@ -141,10 +141,10 @@ wrap up before it runs out.
 
 ```python
 # client request metadata — opt into the wrap-up backstop (see §3 for the full call):
-metadata={"agent_framework_task_budget_tokens": "3582", "agent_framework_task_budget_enforce": "true"}
+metadata={"task_budget_tokens": "3582", "task_budget_enforce": "true"}
 ```
 
-Adding `"agent_framework_task_budget_enforce": "true"` turns on a backstop **on top of** the advisory
+Adding `"task_budget_enforce": "true"` turns on a backstop **on top of** the advisory
 (the countdown is still injected before every model call). When the budget is spent,
 the next tool call is **short-circuited**: instead of running the tool, the backstop
 hands the model a *"budget exhausted — stop calling tools and write your best answer
@@ -162,17 +162,17 @@ cities):
 
 The backstop stops the loop **between turns** and keeps the assistant's
 already-generated text — it never truncates a reply to empty. The advisory-only run
-at the same budget wraps up similarly on its own; `agent_framework_task_budget_enforce` simply
+at the same budget wraps up similarly on its own; `task_budget_enforce` simply
 *guarantees* the tool loop stops.
 
 ### Pattern 3 — enforcement on but the task fits: it just completes
 
 ```python
 # client request metadata for a task that comfortably fits (see §3 for the full call):
-metadata={"agent_framework_task_budget_tokens": "200000", "agent_framework_task_budget_enforce": "true"}
+metadata={"task_budget_tokens": "200000", "task_budget_enforce": "true"}
 ```
 
-When the work comfortably fits the budget, `agent_framework_task_budget_enforce` behaves exactly like
+When the work comfortably fits the budget, `task_budget_enforce` behaves exactly like
 advisory mode with a backstop that never fires. Observed: both tool calls ran, the
 countdown was injected before **every** model call, the budget went
 `200,000 → 199,300`, and the run finished normally with a clean one-sentence answer.

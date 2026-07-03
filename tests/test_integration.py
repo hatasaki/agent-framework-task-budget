@@ -99,20 +99,20 @@ def test_enable_uses_setattr_fallback_for_restricted_agent():
 # Server-side hosting helpers — remote caller passes a plain JSON field
 # --------------------------------------------------------------------------- #
 def test_extract_budget_top_level_int():
-    assert extract_budget_tokens({"message": "x", "agent_framework_task_budget_tokens": 80_000}) == 80_000
+    assert extract_budget_tokens({"message": "x", "task_budget_tokens": 80_000}) == 80_000
 
 
 def test_extract_budget_alias_key():
-    assert extract_budget_tokens({"agent_framework_task_budget": 50_000}) == 50_000
+    assert extract_budget_tokens({"task_budget": 50_000}) == 50_000
 
 
 def test_extract_budget_from_metadata_string():
     # OpenAI `metadata` values are transmitted as strings.
-    assert extract_budget_tokens({"metadata": {"agent_framework_task_budget_tokens": "80000"}}) == 80_000
+    assert extract_budget_tokens({"metadata": {"task_budget_tokens": "80000"}}) == 80_000
 
 
 def test_extract_budget_from_extra_body():
-    assert extract_budget_tokens({"extra_body": {"agent_framework_task_budget": 12_345}}) == 12_345
+    assert extract_budget_tokens({"extra_body": {"task_budget": 12_345}}) == 12_345
 
 
 def test_extract_budget_missing_returns_none():
@@ -120,9 +120,9 @@ def test_extract_budget_missing_returns_none():
 
 
 def test_extract_budget_rejects_bool_and_nonpositive():
-    assert extract_budget_tokens({"agent_framework_task_budget_tokens": True}) is None
-    assert extract_budget_tokens({"agent_framework_task_budget_tokens": 0}) is None
-    assert extract_budget_tokens({"agent_framework_task_budget_tokens": -5}) is None
+    assert extract_budget_tokens({"task_budget_tokens": True}) is None
+    assert extract_budget_tokens({"task_budget_tokens": 0}) is None
+    assert extract_budget_tokens({"task_budget_tokens": -5}) is None
 
 
 def test_extract_budget_rejects_non_mapping():
@@ -133,12 +133,12 @@ def test_extract_budget_rejects_non_mapping():
 @pytest.mark.parametrize(
     "payload,expected",
     [
-        ({"agent_framework_task_budget_enforce": "true"}, True),
-        ({"agent_framework_task_budget_enforce": True}, True),
-        ({"metadata": {"agent_framework_task_budget_enforce": "1"}}, True),
-        ({"extra_body": {"agent_framework_task_budget_enforce": "on"}}, True),
-        ({"agent_framework_task_budget_enforce": "false"}, False),
-        ({"agent_framework_task_budget_enforce": "nope"}, False),
+        ({"task_budget_enforce": "true"}, True),
+        ({"task_budget_enforce": True}, True),
+        ({"metadata": {"task_budget_enforce": "1"}}, True),
+        ({"extra_body": {"task_budget_enforce": "on"}}, True),
+        ({"task_budget_enforce": "false"}, False),
+        ({"task_budget_enforce": "nope"}, False),
         ({"message": "x"}, False),
         (None, False),
     ],
@@ -150,7 +150,7 @@ def test_extract_budget_enforce(payload, expected):
 # --------------------------------------------------------------------------- #
 # _ensure_budget_enabled — the auto-wiring the host factories apply so that
 # hosting an un-wired agent still makes the per-request budget take effect
-# (guards against the silent "agent_framework_task_budget_tokens changes nothing" footgun).
+# (guards against the silent "task_budget_tokens changes nothing" footgun).
 # --------------------------------------------------------------------------- #
 def _budget_mws(middleware):
     from agent_framework_task_budget.integration import _BUDGET_MIDDLEWARE_TYPES

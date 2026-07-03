@@ -157,9 +157,9 @@ class _Serving:
 
 def client_call(port: int, *, budget: int, enforce: bool, stream: bool) -> str:
     client = OpenAI(base_url=f"http://127.0.0.1:{port}", api_key="local", timeout=600)
-    metadata = {"agent_framework_task_budget_tokens": str(budget)}
+    metadata = {"task_budget_tokens": str(budget)}
     if enforce:
-        metadata["agent_framework_task_budget_enforce"] = "true"
+        metadata["task_budget_enforce"] = "true"
     kwargs = {"model": "readme-verify", "input": LOOP_TASK, "store": False, "metadata": metadata}
     if not stream:
         resp = client.responses.create(**kwargs)  # type: ignore[arg-type]

@@ -15,7 +15,7 @@ to the standard Responses call::
     client.responses.create(
         model="my-agent",
         input="Investigate the outage",
-        metadata={"agent_framework_task_budget_tokens": "80000"},
+        metadata={"task_budget_tokens": "80000"},
     )
 
 WHY ``budget_responses_host`` IS NEEDED
@@ -27,7 +27,7 @@ run and **drops** request ``metadata``/``extra_body`` before the agent runs. So 
 custom budget field would never reach the agent on that path.
 
 ``budget_responses_host`` is a thin ``ResponsesHostServer`` subclass that reads
-``request.metadata``, extracts ``agent_framework_task_budget_tokens``, and binds it across the
+``request.metadata``, extracts ``task_budget_tokens``, and binds it across the
 server-side run (via ``bind_budget_over``) so the existing chat middleware sees
 it. It overrides one internal method (``_handle_response``); pin the hosting
 version or re-check it on upgrade.
@@ -92,7 +92,7 @@ def call_remote_agent() -> str:  # pragma: no cover - needs a live endpoint
 
     The budget rides along in ``metadata`` (Responses metadata values are
     strings; the server converts the digit string). To resume a partly-spent
-    budget across calls, also send ``"agent_framework_task_budget_remaining": "<int>"``.
+    budget across calls, also send ``"task_budget_remaining": "<int>"``.
     """
     from openai import OpenAI
 
@@ -101,7 +101,7 @@ def call_remote_agent() -> str:  # pragma: no cover - needs a live endpoint
     response = client.responses.create(
         model="my-agent",
         input="Investigate the outage...",
-        metadata={"agent_framework_task_budget_tokens": "80000"},  # ← the budget, in the request
+        metadata={"task_budget_tokens": "80000"},  # ← the budget, in the request
     )
     return response.output_text
 
@@ -110,7 +110,7 @@ def call_remote_agent() -> str:  # pragma: no cover - needs a live endpoint
 # ALTERNATIVE — the Invocations protocol (plain JSON body instead of OpenAI SDK).
 # --------------------------------------------------------------------------- #
 # If you host on the Invocations protocol instead of Responses, the client sends a
-# plain JSON body ({"message": "...", "agent_framework_task_budget_tokens": 80000}) and needs no
+# plain JSON body ({"message": "...", "task_budget_tokens": 80000}) and needs no
 # OpenAI SDK. The stock InvocationsHostServer's handler reads only "message"/"stream"
 # and drops extra fields, so budget_invocations_host subclasses it the same way
 # budget_responses_host does — lifting the budget from the body and binding it across

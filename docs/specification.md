@@ -39,7 +39,7 @@ sequenceDiagram
     participant A as MAF agent (loop + middleware)
     participant M as Model
 
-    C->>H: responses.create — metadata with agent_framework_task_budget_tokens=80000
+    C->>H: responses.create — metadata with task_budget_tokens=80000
     H->>H: Extract the budget from the request (extract_budget_tokens)
     H->>A: Bind the budget to a ContextVar (bind_budget_over)
     loop Tool loop (per model call)
@@ -127,7 +127,7 @@ client = OpenAI(base_url="https://<your-hosted-agent-endpoint>", api_key="...")
 client.responses.create(
     model="my-agent",
     input="Investigate the flaky CI test.",
-    metadata={"agent_framework_task_budget_tokens": "80000"},   # advisory only
+    metadata={"task_budget_tokens": "80000"},   # advisory only
 )
 ```
 
@@ -138,8 +138,8 @@ client.responses.create(
     model="my-agent",
     input="Investigate the flaky CI test.",
     metadata={
-        "agent_framework_task_budget_tokens": "80000",
-        "agent_framework_task_budget_enforce": "true",   # omit / "false" = advisory only
+        "task_budget_tokens": "80000",
+        "task_budget_enforce": "true",   # omit / "false" = advisory only
     },
 )
 ```
@@ -154,14 +154,14 @@ Client fields are **plain strings/integers**. Responses API `metadata` values ar
 
 | Field | Type | Meaning | Default |
 |---|---|---|---|
-| `agent_framework_task_budget_tokens` | int or digit string | The total token budget for this request. **Its presence activates the budget.** | none (absent = no budget = normal behavior) |
-| `agent_framework_task_budget_enforce` | bool or `"true"`/`"1"`/`"yes"`/`"on"` | Turn on the enforcement backstop | `false` (advisory only) |
-| `agent_framework_task_budget` (alias) | int or digit string | Alias for `..._tokens`; either works | — |
+| `task_budget_tokens` | int or digit string | The total token budget for this request. **Its presence activates the budget.** | none (absent = no budget = normal behavior) |
+| `task_budget_enforce` | bool or `"true"`/`"1"`/`"yes"`/`"on"` | Turn on the enforcement backstop | `false` (advisory only) |
+| `task_budget` (alias) | int or digit string | Alias for `..._tokens`; either works | — |
 
 Notes:
 
 - Only a positive integer is a valid budget (`0`, negatives, and `bool` are ignored and treated as "no budget").
-- The constant name `agent_framework_task_budget_remaining` is reserved, but **the current host factories read only `tokens` and `enforce`** (resuming a partially-spent budget is not wired on the hosted path). To persist and resume a budget, use `TaskBudget.snapshot()` / `TaskBudget.restore()` (see [§10](#10-the-taskbudget-state-machine-core)).
+- The constant name `task_budget_remaining` is reserved, but **the current host factories read only `tokens` and `enforce`** (resuming a partially-spent budget is not wired on the hosted path). To persist and resume a budget, use `TaskBudget.snapshot()` / `TaskBudget.restore()` (see [§10](#10-the-taskbudget-state-machine-core)).
 
 ---
 
@@ -198,7 +198,7 @@ Main symbols exported from `agent_framework_task_budget`.
 | `extract_budget_tokens(payload, *, keys=..., containers=...)` | function | Pull a positive token budget out of a request body (`None` if absent). |
 | `extract_budget_enforce(payload, *, containers=...)` | function | Pull the enforcement flag (default `False`). |
 | `TaskBudget` | dataclass | The budget state machine (see [§10](#10-the-taskbudget-state-machine-core)). MAF-independent, always importable. |
-| `BUDGET_TOKENS_KEY` / `BUDGET_ENFORCE_KEY` / `BUDGET_REMAINING_KEY` | constants | Request field names (`agent_framework_task_budget_tokens` / `_enforce` / `_remaining`). |
+| `BUDGET_TOKENS_KEY` / `BUDGET_ENFORCE_KEY` / `BUDGET_REMAINING_KEY` | constants | Request field names (`task_budget_tokens` / `_enforce` / `_remaining`). |
 
 ---
 
@@ -209,7 +209,7 @@ Behavior confirmed against `gpt-5.4-mini` on Foundry, **comparing the same agent
 ### Pattern 1 — advisory only, on a real tool loop: the model paces itself
 
 ```python
-metadata={"agent_framework_task_budget_tokens": "3582"}
+metadata={"task_budget_tokens": "3582"}
 ```
 
 The countdown is a **hint, not a limit** (the loop is never force-stopped). But on a genuine multi-step tool loop (here: a 12-city itinerary walked one tool call at a time), showing the remaining budget before each call makes the model **stop early and wrap up**. Measured on the same task with the budget at ~40% of the natural cost:
@@ -226,7 +226,7 @@ The countdown is a **hint, not a limit** (the loop is never force-stopped). But 
 ### Pattern 2 — enforcement on, budget runs out: a partial, not an empty answer
 
 ```python
-metadata={"agent_framework_task_budget_tokens": "3582", "agent_framework_task_budget_enforce": "true"}
+metadata={"task_budget_tokens": "3582", "task_budget_enforce": "true"}
 ```
 
 `enforce` layers a backstop **on top of** the advisory (the countdown is still injected). When the budget is spent, the next tool call is **short-circuited**: instead of running the tool, the model receives a *"budget spent — stop calling tools and write your best final answer from what you have"* result. The model then writes a **partial**, not an empty response.
@@ -242,7 +242,7 @@ The backstop stops **between turns** and keeps already-generated text; it never 
 ### Pattern 3 — enforcement on but the task fits: it just completes
 
 ```python
-metadata={"agent_framework_task_budget_tokens": "200000", "agent_framework_task_budget_enforce": "true"}
+metadata={"task_budget_tokens": "200000", "task_budget_enforce": "true"}
 ```
 
 When the work fits the budget, `enforce` behaves exactly like advisory mode with a backstop that never fires. Observed: both tools ran, the countdown was injected on every call, the budget went `200,000 → 199,300`, and the run finished normally with a concise answer.
@@ -275,7 +275,7 @@ class TaskBudget:
 ## 11. Design points and constraints
 
 - **Hosted (remote) only.** Only the hosted-agent path is supported. There is no "in-process" path that passes a budget directly to `agent.run(...)` in the same process.
-- **Enforcement is per-request opt-in.** The default is advisory-only. The server does not decide enforcement globally; the client opts in per request via `agent_framework_task_budget_enforce`.
+- **Enforcement is per-request opt-in.** The default is advisory-only. The server does not decide enforcement globally; the client opts in per request via `task_budget_enforce`.
 - **Activation condition.** If a request carries no valid `..._tokens` (a positive integer), that run is a complete no-op (normal behavior).
 - **Concurrency isolation.** The budget is bound to a `ContextVar`, so a shared agent stays isolated per run.
 - **MAF version resilience.** Touch-points such as `usage_details`, `Message`, `call_next`, and `ChatContext` are accessed defensively, so future renames/shape changes are unlikely to break it fatally (all coupling lives in `maf_adapter.py`).

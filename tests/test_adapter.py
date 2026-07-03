@@ -301,7 +301,7 @@ async def test_enforcement_uses_contextvar_budget_when_unbound():
     budget = TaskBudget(total=20_000)
     budget.consume(20_000)
     _current_budget.set(budget)
-    _current_enforce.set(True)  # caller opted in via agent_framework_task_budget_enforce metadata
+    _current_enforce.set(True)  # caller opted in via task_budget_enforce metadata
     mw = TaskBudgetEnforcementMiddleware()  # no fixed budget
 
     ctx = SimpleNamespace(result=None)
@@ -312,7 +312,7 @@ async def test_enforcement_uses_contextvar_budget_when_unbound():
 async def test_enforcement_metadata_driven_is_advisory_when_flag_off():
     # No fixed budget + the per-run enforce flag left False (the default): even an
     # exhausted budget must NOT short-circuit the tool. This is the enable_task_budget
-    # default — advisory-only unless the caller sets agent_framework_task_budget_enforce truthy.
+    # default — advisory-only unless the caller sets task_budget_enforce truthy.
     budget = TaskBudget(total=20_000)
     budget.consume(20_000)
     _current_budget.set(budget)

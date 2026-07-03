@@ -49,28 +49,28 @@ logger = logging.getLogger(__name__)
 #: Request field a remote caller sets to choose a run's token budget (e.g. in the
 #: Responses ``metadata`` an OpenAI-SDK client sends). The server lifts it from the
 #: request; the caller imports nothing from this library — a plain value is enough.
-BUDGET_TOKENS_KEY = "agent_framework_task_budget_tokens"
+BUDGET_TOKENS_KEY = "task_budget_tokens"
 #: Optional request field to seed ``remaining`` separately from ``total`` (e.g. to
 #: resume a partially-spent budget). Defaults to ``total`` when omitted.
-BUDGET_REMAINING_KEY = "agent_framework_task_budget_remaining"
+BUDGET_REMAINING_KEY = "task_budget_remaining"
 #: Optional request field a caller sets to arm the enforcement backstop for a run
-#: (e.g. ``metadata={"agent_framework_task_budget_enforce": "true"}``). Accepts the string
+#: (e.g. ``metadata={"task_budget_enforce": "true"}``). Accepts the string
 #: ``"true"``/``"false"`` (case-insensitive) or a real ``bool``; **defaults to off**
 #: when omitted, so enforcement is strictly opt-in per request.
-BUDGET_ENFORCE_KEY = "agent_framework_task_budget_enforce"
+BUDGET_ENFORCE_KEY = "task_budget_enforce"
 
 #: The budget in force for the current agent run, seeded per run by
 #: :func:`bind_budget` and read by the chat/enforcement middleware. A ``ContextVar``
 #: keeps concurrent runs isolated without threading state through every call site.
 _current_budget: contextvars.ContextVar["TaskBudget | None"] = contextvars.ContextVar(
-    "agent_framework_task_budget_current", default=None
+    "task_budget_current", default=None
 )
 #: Whether the enforcement backstop is armed for the current run, seeded per run by
-#: :func:`bind_budget` from the caller's ``agent_framework_task_budget_enforce`` request field
+#: :func:`bind_budget` from the caller's ``task_budget_enforce`` request field
 #: (default ``False``) and read by :class:`TaskBudgetEnforcementMiddleware`, so each
 #: concurrent run decides enforcement independently of the others.
 _current_enforce: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "agent_framework_task_budget_enforce_current", default=False
+    "task_budget_enforce_current", default=False
 )
 
 _TOTAL_KEYS = ("total_token_count", "total_tokens")
@@ -144,7 +144,7 @@ def bind_budget(
     budget stays a clean no-op. ``min_total=0`` takes the chosen total at face
     value, since it is an explicit per-request decision. ``enforce=True`` arms the
     enforcement backstop for the block (the transport equivalent of the caller's
-    ``agent_framework_task_budget_enforce`` metadata), defaulting to advisory-only.
+    ``task_budget_enforce`` metadata), defaulting to advisory-only.
     """
     if total is None:
         yield None
@@ -325,7 +325,7 @@ class TaskBudgetEnforcementMiddleware(FunctionMiddleware):
     *fixed* budget always enforces once that budget is spent — its owner opted into
     enforcement explicitly. A *metadata-driven* middleware (no fixed budget, the
     ``enable_task_budget`` model) stays advisory-only **unless this run's caller set**
-    ``agent_framework_task_budget_enforce`` truthy in the request; the default is off, so it is always
+    ``task_budget_enforce`` truthy in the request; the default is off, so it is always
     safe to leave attached.
     """
 
@@ -350,7 +350,7 @@ class TaskBudgetEnforcementMiddleware(FunctionMiddleware):
         # explicitly opted into enforcement, so it always bites once spent. A
         # metadata-driven middleware (no fixed budget, e.g. wired via
         # ``enable_task_budget``) bites only when *this run's* caller set the
-        # ``agent_framework_task_budget_enforce`` metadata truthy — advisory-only otherwise.
+        # ``task_budget_enforce`` metadata truthy — advisory-only otherwise.
         if self._budget is not None:
             return True
         return _current_enforce.get()

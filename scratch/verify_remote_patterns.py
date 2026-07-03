@@ -11,7 +11,7 @@ This script exercises the *actual hosted-agent path the user runs*:
 
 Patterns:
   A  no budget                         -> baseline: the whole loop runs.
-  B  metadata agent_framework_task_budget_tokens only  -> advisory: model paces itself, fewer steps.
+  B  metadata task_budget_tokens only  -> advisory: model paces itself, fewer steps.
   C  metadata tokens + enforce="true"  -> backstop: a tool call is short-circuited
                                           and the model wraps up (graceful partial).
   USER-CODE  the user's exact server (``budget_responses_host(agent)`` with NO
@@ -216,9 +216,9 @@ def client_call(port: int, *, budget: int | None = None, enforce: bool = False) 
     client = OpenAI(base_url=f"http://127.0.0.1:{port}", api_key="local", timeout=600)
     metadata: dict[str, str] = {}
     if budget is not None:
-        metadata["agent_framework_task_budget_tokens"] = str(budget)  # Responses metadata values are strings
+        metadata["task_budget_tokens"] = str(budget)  # Responses metadata values are strings
     if enforce:
-        metadata["agent_framework_task_budget_enforce"] = "true"
+        metadata["task_budget_enforce"] = "true"
     kwargs: dict[str, object] = {"model": "readme-verify", "input": LOOP_TASK, "store": False}
     if metadata:
         kwargs["metadata"] = metadata
@@ -266,12 +266,12 @@ def main() -> None:
         _print(a)
 
         scarce = max(1, int(a["tokens"] * 0.4))
-        print(f"\n-- Pattern B: metadata agent_framework_task_budget_tokens={scarce} (advisory only) --")
+        print(f"\n-- Pattern B: metadata task_budget_tokens={scarce} (advisory only) --")
         _reset_obs()
         b = snapshot("B", client_call(srv.port, budget=scarce))
         _print(b)
 
-        print(f"\n-- Pattern C: metadata agent_framework_task_budget_tokens={scarce} + agent_framework_task_budget_enforce=true --")
+        print(f"\n-- Pattern C: metadata task_budget_tokens={scarce} + task_budget_enforce=true --")
         _reset_obs()
         c = snapshot("C", client_call(srv.port, budget=scarce, enforce=True))
         _print(c)
@@ -288,14 +288,14 @@ def main() -> None:
     print("\n" + "=" * 78)
     print("RESULTS")
     print("=" * 78)
-    b_metadata_effect = b["countdown_calls"] > 0  # agent_framework_task_budget_tokens honored server-side (countdown injected)
+    b_metadata_effect = b["countdown_calls"] > 0  # task_budget_tokens honored server-side (countdown injected)
     c_changed = c["iterations"] < a["iterations"]  # enforce deterministically stops the loop early
     c_enforced = c["attempts"] > c["iterations"] and c["answer_len"] > 0  # a tool call was short-circuited
     usercode_works = usercode["countdown_calls"] > 0 and usercode["iterations"] < a["iterations"]  # auto-wire fix
 
     checks = {
         "A ran the full loop (baseline)": a["iterations"] >= 4,
-        "B: agent_framework_task_budget_tokens honored remotely (countdown injected every call)": b_metadata_effect,
+        "B: task_budget_tokens honored remotely (countdown injected every call)": b_metadata_effect,
         "C: enforce deterministically stopped the loop early (fewer iterations than A)": c_changed,
         "C: enforce short-circuited a tool call AND produced a graceful non-empty partial": c_enforced,
         "USER-CODE: budget_responses_host ALONE now honors the budget (auto-wired) = the fix": usercode_works,
@@ -304,7 +304,7 @@ def main() -> None:
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}")
 
     print(
-        "\nNOTE: advisory-only (B, agent_framework_task_budget_tokens without enforce) is a HINT, not a limit -- "
+        "\nNOTE: advisory-only (B, task_budget_tokens without enforce) is a HINT, not a limit -- "
         f"it may or may not reduce steps. This run B did {b['iterations']} iterations vs A's "
         f"{a['iterations']} (the model chose to finish); the countdown was still injected on every "
         "call. Enforce (C) is the deterministic control that actually stops the loop."

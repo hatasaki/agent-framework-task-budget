@@ -7,7 +7,7 @@ The model is :func:`enable_task_budget`: wire the agent once on the server/owner
 side so it carries the budget-reading middleware (an advisory countdown plus an
 optional enforcement backstop). A remote caller then chooses the budget per request
 by adding a plain field to the call it already makes — e.g. an OpenAI-SDK client
-sends ``metadata={"agent_framework_task_budget_tokens": "80000"}`` — and **imports nothing from
+sends ``metadata={"task_budget_tokens": "80000"}`` — and **imports nothing from
 this library**.
 
 For a MAF agent deployed as a **hosted agent** (a container behind a remote API,
@@ -73,7 +73,7 @@ def enable_task_budget(agent: AgentT) -> AgentT:
         client.responses.create(
             model="my-agent",
             input="Investigate X...",
-            metadata={"agent_framework_task_budget_tokens": "80000"},
+            metadata={"task_budget_tokens": "80000"},
         )
 
     A fresh budget is created per run and isolated across concurrent runs (via a
@@ -82,19 +82,19 @@ def enable_task_budget(agent: AgentT) -> AgentT:
     **Enforcement is chosen by the caller, per request** (default advisory-only).
     By default the budget is purely advisory — a remaining-token countdown that lets
     the model pace itself. A caller that wants a hard backstop adds
-    ``"agent_framework_task_budget_enforce": "true"`` to the same request; once that run's budget is
+    ``"task_budget_enforce": "true"`` to the same request; once that run's budget is
     spent, further tool calls are skipped and the model is steered to wrap up with
     what it already gathered (a graceful partial) instead of erroring out::
 
-        metadata={"agent_framework_task_budget_tokens": "80000", "agent_framework_task_budget_enforce": "true"}
+        metadata={"task_budget_tokens": "80000", "task_budget_enforce": "true"}
 
     Returns the same agent so the call can be chained. The request fields are
-    ``"agent_framework_task_budget_tokens"`` and ``"agent_framework_task_budget_enforce"``.
+    ``"task_budget_tokens"`` and ``"task_budget_enforce"``.
     """
     extra: list[Any] = [
         TaskBudgetChatMiddleware(),
         # Always attached, but inert unless this run's caller opts into enforcement
-        # via the ``agent_framework_task_budget_enforce`` request field (it carries no fixed budget,
+        # via the ``task_budget_enforce`` request field (it carries no fixed budget,
         # so it defers to the per-run flag). Default runs stay purely advisory.
         TaskBudgetEnforcementMiddleware(),
     ]
@@ -112,11 +112,11 @@ def enable_task_budget(agent: AgentT) -> AgentT:
 # server so it lifts the budget out of the incoming request and binds it across the
 # server-side run; ``extract_budget_tokens`` / ``extract_budget_enforce`` are the
 # underlying helpers. The caller imports nothing — it adds a plain field such as
-# ``metadata={"agent_framework_task_budget_tokens": "80000"}`` to the call it already makes.
+# ``metadata={"task_budget_tokens": "80000"}`` to the call it already makes.
 
 #: Request-body field names a remote caller may use to carry the budget. These
 #: are plain JSON keys — the caller imports nothing from this library.
-BUDGET_REQUEST_KEYS: tuple[str, ...] = (BUDGET_TOKENS_KEY, "agent_framework_task_budget")
+BUDGET_REQUEST_KEYS: tuple[str, ...] = (BUDGET_TOKENS_KEY, "task_budget")
 #: Sub-objects of the request body that are also searched for the budget keys,
 #: so OpenAI-SDK callers may nest the value under ``metadata`` or ``extra_body``.
 BUDGET_REQUEST_CONTAINERS: tuple[str, ...] = ("metadata", "extra_body")
@@ -169,7 +169,7 @@ def extract_budget_tokens(
     Designed for the **server side** of a remotely-called agent (for example a
     Foundry *hosted agent* invocations handler): the remote caller passes the
     budget as a plain field in the JSON body — ``{"message": "...",
-    "agent_framework_task_budget_tokens": 80000}`` — and imports nothing from this library.
+    "task_budget_tokens": 80000}`` — and imports nothing from this library.
 
     The value is looked up first at the top level under each name in ``keys``,
     then inside each sub-object named in ``containers`` (so callers may nest it
@@ -199,8 +199,8 @@ def extract_budget_enforce(
     """Pull the optional enforcement flag out of an incoming request body.
 
     The **server-side** companion to :func:`extract_budget_tokens` for the
-    ``agent_framework_task_budget_enforce`` flag: a remote caller adds one plain field
-    (``{"agent_framework_task_budget_enforce": "true"}``), optionally nested under ``metadata`` or
+    ``task_budget_enforce`` flag: a remote caller adds one plain field
+    (``{"task_budget_enforce": "true"}``), optionally nested under ``metadata`` or
     ``extra_body``, and imports nothing from this library. The flag is looked up
     first at the top level, then inside each ``containers`` sub-object; a real
     ``bool`` and the truthy strings (``"true"``/``"1"``/``"yes"``/``"on"``) are
@@ -243,7 +243,7 @@ def _ensure_budget_enabled(agent: Any) -> None:
     **reads** it — the advisory countdown and the enforcement backstop — is
     attached by :func:`enable_task_budget`. Hosting an agent that was never wired
     would bind the budget to a value nothing consumes, so the budget silently has
-    no effect (exactly the "``agent_framework_task_budget_tokens`` changes nothing" symptom).
+    no effect (exactly the "``task_budget_tokens`` changes nothing" symptom).
 
     To make the one-liner ``budget_responses_host(agent)`` correct on its own,
     this wires the agent when it is not already budget-enabled. It is idempotent:
@@ -269,7 +269,7 @@ def budget_responses_host(agent: Any, *, default_total: int | None = None, **kwa
 
     The OpenAI-compatible Responses host normally **drops** the request's
     ``metadata``/``extra_body`` before running the agent, so an OpenAI-SDK client
-    that sends ``metadata={"agent_framework_task_budget_tokens": "80000"}`` would otherwise have
+    that sends ``metadata={"task_budget_tokens": "80000"}`` would otherwise have
     its budget ignored. This factory returns a thin ``ResponsesHostServer``
     subclass that lifts the budget out of ``request.metadata`` and binds it across
     the run via :func:`bind_budget_over`, so a client can drive the agent with the
@@ -279,7 +279,7 @@ def budget_responses_host(agent: Any, *, default_total: int | None = None, **kwa
         client.responses.create(
             model="my-agent",
             input="Investigate the outage",
-            metadata={"agent_framework_task_budget_tokens": "80000"},
+            metadata={"task_budget_tokens": "80000"},
         )
 
     Wire the agent once with :func:`enable_task_budget` before hosting it; pass any
@@ -313,14 +313,14 @@ def budget_invocations_host(agent: Any, *, default_total: int | None = None, **k
 
     The Invocations host expects a JSON body with a ``"message"`` field and runs the
     agent itself. Its stock ``_handle_invoke`` reads only ``"message"``/``"stream"``
-    and **drops** any extra field, so a caller's ``agent_framework_task_budget_tokens`` in the body
+    and **drops** any extra field, so a caller's ``task_budget_tokens`` in the body
     would otherwise be ignored. This factory returns a thin ``InvocationsHostServer``
     subclass that lifts the budget out of the request body and binds it across the
     run, so a remote caller can govern the server-side loop by adding one plain
     field to the JSON it already sends::
 
         # client (imports nothing from this library):
-        {"message": "Investigate the outage", "agent_framework_task_budget_tokens": 80000}
+        {"message": "Investigate the outage", "task_budget_tokens": 80000}
 
     Wire the agent once with :func:`enable_task_budget` before hosting it; pass any
     server-side fallback via ``default_total`` here. Requires the
